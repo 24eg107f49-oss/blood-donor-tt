@@ -19,10 +19,12 @@ public class Donor {
     private Integer age;
 
     @NotBlank
+    @Column(nullable = false, length = 5)
     @Pattern(regexp = "A\\+|A-|B\\+|B-|AB\\+|AB-|O\\+|O-", message = "Invalid blood group")
     private String bloodGroup;
 
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @Column(nullable = false, length = 20)
     @NotBlank @Pattern(regexp = "^[+0-9() .-]{7,20}$", message = "Invalid phone number")
     private String phone;
 

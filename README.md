@@ -29,6 +29,16 @@ React + Vite frontend, Spring Boot 4.1 / Java 17 API, and MySQL-compatible datab
 3. Set `CORS_ALLOWED_ORIGINS` to the exact deployed Vercel origin, with no path (for example, `https://your-app.vercel.app`). Set `ADMIN_API_KEY` to a strong secret. Never put this key in the frontend.
 4. Keep secrets in the Render environment, not in source control. `DDL_AUTO` defaults to `update`; use a deliberate schema migration process before changing it to `validate`.
 
+## Run backend with Docker Compose
+
+Install Docker Desktop with the WSL 2 backend, then run from the repository root:
+
+```bash
+docker compose up --build
+```
+
+The API is available at `http://localhost:8080`; Compose publishes MySQL on host port `3307` to avoid colliding with a local MySQL service. Stop the services with `docker compose down`. The named database volume persists; `docker compose down -v` deletes its data.
+
 ## Deploy the frontend to Vercel
 
 1. Import the repository and set the Vercel project **Root Directory** to `frontend`.

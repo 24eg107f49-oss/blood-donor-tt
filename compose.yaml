@@ -1,0 +1,36 @@
+services:
+  database:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+      MYSQL_DATABASE: blood_donor
+    ports:
+      - "3307:3306"
+    volumes:
+      - blood-donor-data:/var/lib/mysql
+      - ./database/blood_donor.sql:/docker-entrypoint-initdb.d/001-blood-donor.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: ./backend/blood-donor-api
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DB_HOST: database
+      DB_PORT: 3306
+      DB_NAME: blood_donor
+      DB_USERNAME: root
+      DB_PASSWORD: ${DB_PASSWORD:-root}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174}
+      ADMIN_API_KEY: ${ADMIN_API_KEY:-}
+    ports:
+      - "8080:8080"
+
+volumes:
+  blood-donor-data:

@@ -3,21 +3,27 @@ services:
     name: lifelink-api
     runtime: docker
     plan: free
+    region: oregon
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /api/health
     envVars:
       - key: DB_URL
-        sync: false
-      - key: DB_USERNAME
-        sync: false
-      - key: DB_PASSWORD
-        sync: false
-      - key: CORS_ALLOWED_ORIGINS
-        sync: false
+        fromDatabase:
+          name: lifelink-db
+          property: connectionString
+      - key: JPA_DATABASE_PLATFORM
+        value: org.hibernate.dialect.PostgreSQLDialect
       - key: JWT_SECRET
-        sync: false
+        generateValue: true
       - key: ADMIN_EMAIL
-        sync: false
+        value: 24eg107f49@anurag.edu.in
       - key: ADMIN_PASSWORD
-        sync: false
+        generateValue: true
+
+databases:
+  - name: lifelink-db
+    databaseName: lifelink
+    user: lifelink
+    plan: free
+    region: oregon

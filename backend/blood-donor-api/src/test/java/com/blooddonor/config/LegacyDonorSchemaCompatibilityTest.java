@@ -16,15 +16,16 @@ class LegacyDonorSchemaCompatibilityTest {
     @Test
     void makesRequiredLegacyNameColumnOptional() {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
-        when(jdbcTemplate.execute(org.mockito.ArgumentMatchers.<ConnectionCallback<Integer>>any())).thenAnswer(invocation -> {
+        when(jdbcTemplate.execute(org.mockito.ArgumentMatchers.<ConnectionCallback<LegacyDonorSchemaCompatibility.SchemaCheck>>any())).thenAnswer(invocation -> {
             Connection connection = mock(Connection.class);
             DatabaseMetaData metadata = mock(DatabaseMetaData.class);
             ResultSet columns = mock(ResultSet.class);
             when(connection.getMetaData()).thenReturn(metadata);
+            when(metadata.getDatabaseProductName()).thenReturn("MySQL");
             when(metadata.getColumns(null, null, "donors", "name")).thenReturn(columns);
             when(columns.next()).thenReturn(true);
             when(columns.getString("IS_NULLABLE")).thenReturn("NO");
-            return invocation.<ConnectionCallback<Integer>>getArgument(0).doInConnection(connection);
+            return invocation.<ConnectionCallback<LegacyDonorSchemaCompatibility.SchemaCheck>>getArgument(0).doInConnection(connection);
         });
 
         new LegacyDonorSchemaCompatibility(jdbcTemplate).run(mock(ApplicationArguments.class));
@@ -35,18 +36,39 @@ class LegacyDonorSchemaCompatibilityTest {
     @Test
     void leavesCurrentSchemaUnchanged() {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
-        when(jdbcTemplate.execute(org.mockito.ArgumentMatchers.<ConnectionCallback<Integer>>any())).thenAnswer(invocation -> {
+        when(jdbcTemplate.execute(org.mockito.ArgumentMatchers.<ConnectionCallback<LegacyDonorSchemaCompatibility.SchemaCheck>>any())).thenAnswer(invocation -> {
             Connection connection = mock(Connection.class);
             DatabaseMetaData metadata = mock(DatabaseMetaData.class);
             ResultSet columns = mock(ResultSet.class);
             when(connection.getMetaData()).thenReturn(metadata);
+            when(metadata.getDatabaseProductName()).thenReturn("PostgreSQL");
             when(metadata.getColumns(null, null, "donors", "name")).thenReturn(columns);
             when(columns.next()).thenReturn(false);
-            return invocation.<ConnectionCallback<Integer>>getArgument(0).doInConnection(connection);
+            return invocation.<ConnectionCallback<LegacyDonorSchemaCompatibility.SchemaCheck>>getArgument(0).doInConnection(connection);
         });
 
         new LegacyDonorSchemaCompatibility(jdbcTemplate).run(mock(ApplicationArguments.class));
 
-        verify(jdbcTemplate, never()).execute("ALTER TABLE donors MODIFY COLUMN name VARCHAR(100) NULL");
+        verify(jdbcTemplate, never()).execute("ALTER TABLE donors ALTER COLUMN name DROP NOT NULL");
+    }
+
+    @Test
+    void usesPostgresCompatibleLegacyMigration() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.execute(org.mockito.ArgumentMatchers.<ConnectionCallback<LegacyDonorSchemaCompatibility.SchemaCheck>>any())).thenAnswer(invocation -> {
+            Connection connection = mock(Connection.class);
+            DatabaseMetaData metadata = mock(DatabaseMetaData.class);
+            ResultSet columns = mock(ResultSet.class);
+            when(connection.getMetaData()).thenReturn(metadata);
+            when(metadata.getDatabaseProductName()).thenReturn("PostgreSQL");
+            when(metadata.getColumns(null, null, "donors", "name")).thenReturn(columns);
+            when(columns.next()).thenReturn(true);
+            when(columns.getString("IS_NULLABLE")).thenReturn("NO");
+            return invocation.<ConnectionCallback<LegacyDonorSchemaCompatibility.SchemaCheck>>getArgument(0).doInConnection(connection);
+        });
+
+        new LegacyDonorSchemaCompatibility(jdbcTemplate).run(mock(ApplicationArguments.class));
+
+        verify(jdbcTemplate).execute("ALTER TABLE donors ALTER COLUMN name DROP NOT NULL");
     }
 }

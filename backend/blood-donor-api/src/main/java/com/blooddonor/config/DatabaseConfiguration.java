@@ -47,7 +47,7 @@ public class DatabaseConfiguration {
         } else {
             String host = firstNonBlank(dbHost, mysqlHost, "localhost");
             if (render && host.equalsIgnoreCase("localhost")) {
-                throw new IllegalStateException("Set DB_URL to a reachable MySQL JDBC URL in Render; localhost is inside the API container");
+                throw new IllegalStateException("Set DB_URL to a reachable PostgreSQL or MySQL URL in Render; localhost is inside the API container");
             }
             String port = firstNonBlank(dbPort, mysqlPort, "3306");
             String database = firstNonBlank(dbName, mysqlDatabase, "blood_donor");
@@ -68,27 +68,32 @@ public class DatabaseConfiguration {
         return new HikariDataSource(config);
     }
 
-    private ParsedUrl parseUrl(String value) {
-        if (value.startsWith("jdbc:mysql://")) return new ParsedUrl(value, "", "");
+    ParsedUrl parseUrl(String value) {
+        if (value.startsWith("jdbc:mysql://") || value.startsWith("jdbc:postgresql://")) {
+            return new ParsedUrl(value, "", "");
+        }
         if (value.startsWith("jdbc:h2:")) return new ParsedUrl(value, "", "");
-        if (!value.startsWith("mysql://")) {
-            throw new IllegalStateException("Database URL must use jdbc:mysql:// or mysql://; URL value is not logged");
+        boolean postgres = value.startsWith("postgresql://") || value.startsWith("postgres://");
+        boolean mysql = value.startsWith("mysql://");
+        if (!postgres && !mysql) {
+            throw new IllegalStateException("Database URL must use a MySQL or PostgreSQL JDBC URL; URL value is not logged");
         }
 
         URI uri;
         try {
             uri = URI.create(value);
         } catch (IllegalArgumentException exception) {
-            throw new IllegalStateException("MYSQL_URL is malformed; URL value is not logged");
+            throw new IllegalStateException("Database URL is malformed; URL value is not logged");
         }
         String host = uri.getHost();
         String path = uri.getRawPath();
         if (!hasText(host) || path == null || path.length() < 2) {
-            throw new IllegalStateException("MYSQL_URL must include a host and database name; URL value is not logged");
+            throw new IllegalStateException("Database URL must include a host and database name; URL value is not logged");
         }
         String database = path.substring(1);
         String query = uri.getRawQuery();
-        String jdbcUrl = "jdbc:mysql://" + host + (uri.getPort() < 0 ? ":3306" : ":" + uri.getPort())
+        String jdbcUrl = (postgres ? "jdbc:postgresql://" : "jdbc:mysql://")
+            + host + (uri.getPort() < 0 ? (postgres ? ":5432" : ":3306") : ":" + uri.getPort())
                 + "/" + database + (hasText(query) ? "?" + query : "");
         String username = "";
         String password = "";
@@ -102,7 +107,7 @@ public class DatabaseConfiguration {
     }
 
     private String decode(String value) {
-        return URLDecoder.decode(value, StandardCharsets.UTF_8);
+        return URLDecoder.decode(value.replace("+", "%2B"), StandardCharsets.UTF_8);
     }
 
     private String firstNonBlank(String... values) {
@@ -116,5 +121,5 @@ public class DatabaseConfiguration {
         return value != null && !value.isBlank();
     }
 
-    private record ParsedUrl(String jdbcUrl, String username, String password) {}
+    record ParsedUrl(String jdbcUrl, String username, String password) {}
 }

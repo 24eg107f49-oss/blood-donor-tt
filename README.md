@@ -1,6 +1,6 @@
 # LifeLink Blood Donor Network
 
-React + Vite frontend, Spring Boot 4.1 / Java 17 API, and MySQL-compatible database. The Vite app is in `frontend`; the API is in `backend/blood-donor-api`.
+React + Vite frontend, Spring Boot 4.1 / Java 17 API, and PostgreSQL on Render. The Vite app is in `frontend`; the API is in `backend/blood-donor-api`. Local MySQL remains supported for development.
 
 ## Run locally
 
@@ -27,10 +27,10 @@ React + Vite frontend, Spring Boot 4.1 / Java 17 API, and MySQL-compatible datab
 
 ## Deploy the API to Render
 
-1. Connect the repository to Render and create a Blueprint from `render.yaml`. The service builds from the root `Dockerfile` and checks `/api/health`.
-2. Provide a reachable MySQL-compatible database. Set `DB_URL` to its full JDBC URL (`jdbc:mysql://HOST:PORT/DATABASE?sslMode=REQUIRED` when required by your provider), plus `DB_USERNAME` and `DB_PASSWORD`. The API also detects `DATABASE_URL`/`MYSQL_URL` (`mysql://user:password@host:port/database`) and the common `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABASE`, `MYSQLUSER`, and `MYSQLPASSWORD` variables. Do not provide a PostgreSQL URL. Render cannot reach a MySQL service running on `localhost`; use a managed database host that allows connections from Render.
-3. Set `CORS_ALLOWED_ORIGINS` to the exact deployed Vercel origin, with no path (for example, `https://your-app.vercel.app`). Set `JWT_SECRET` to a cryptographically random secret of at least 32 characters. Set `ADMIN_EMAIL` and a non-empty `ADMIN_PASSWORD` to bootstrap the admin account. Never put these values in the frontend.
-4. Keep secrets in the Render environment, not in source control. `DDL_AUTO` defaults to `update`; use a deliberate schema migration process before changing it to `validate`.
+1. Connect the repository to Render and sync the Blueprint from `render.yaml`. It creates the API plus a Free Postgres database and injects its private connection string automatically; no database environment values need manual entry.
+2. Render generates the JWT signing secret and initial admin password. The admin email is `24eg107f49@anurag.edu.in`; retrieve the generated password from the Render service's environment settings. Ordinary signup always receives the USER role.
+3. Set Vercel's `VITE_BASE_API_URL` to the API's `onrender.com` URL. CORS is configured for the stateless bearer-token API and does not use cookies.
+4. Render Free Postgres is limited to 1 GB and expires 30 days after creation; after the 14-day grace period Render deletes it. Export/upgrade before expiry if the data must be kept. `DDL_AUTO` defaults to `update`.
 
 ## Run backend with Docker Compose
 

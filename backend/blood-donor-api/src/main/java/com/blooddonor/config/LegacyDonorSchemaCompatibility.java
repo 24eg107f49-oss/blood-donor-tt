@@ -17,18 +17,25 @@ public class LegacyDonorSchemaCompatibility implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        Integer requiredLegacyNameColumns = jdbcTemplate.execute((ConnectionCallback<Integer>) connection -> {
+        SchemaCheck schema = jdbcTemplate.execute((ConnectionCallback<SchemaCheck>) connection -> {
             try (ResultSet columns = connection.getMetaData().getColumns(
                     connection.getCatalog(), null, "donors", "name")) {
                 while (columns.next()) {
-                    return "NO".equalsIgnoreCase(columns.getString("IS_NULLABLE")) ? 1 : 0;
+                    return new SchemaCheck(connection.getMetaData().getDatabaseProductName(),
+                            "NO".equalsIgnoreCase(columns.getString("IS_NULLABLE")));
                 }
-                return 0;
+                return new SchemaCheck(connection.getMetaData().getDatabaseProductName(), false);
             }
         });
 
-        if (requiredLegacyNameColumns > 0) {
-            jdbcTemplate.execute("ALTER TABLE donors MODIFY COLUMN name VARCHAR(100) NULL");
+        if (schema.requiredLegacyNameColumn()) {
+            if (schema.databaseProduct().toLowerCase(java.util.Locale.ROOT).contains("postgres")) {
+                jdbcTemplate.execute("ALTER TABLE donors ALTER COLUMN name DROP NOT NULL");
+            } else {
+                jdbcTemplate.execute("ALTER TABLE donors MODIFY COLUMN name VARCHAR(100) NULL");
+            }
         }
     }
+
+    record SchemaCheck(String databaseProduct, boolean requiredLegacyNameColumn) {}
 }

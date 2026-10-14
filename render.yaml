@@ -3,8 +3,8 @@ services:
     name: lifelink-api
     runtime: docker
     plan: free
-    dockerfilePath: ./backend/blood-donor-api/Dockerfile
-    dockerContext: ./backend/blood-donor-api
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /api/health
     envVars:
       - key: DB_URL
@@ -15,5 +15,9 @@ services:
         sync: false
       - key: CORS_ALLOWED_ORIGINS
         sync: false
-      - key: ADMIN_API_KEY
+      - key: JWT_SECRET
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
         sync: false

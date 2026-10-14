@@ -9,4 +9,6 @@ public interface DonorRepository extends JpaRepository<Donor, Long> {
     List<Donor> findByPubliclyListedTrueAndCityContainingIgnoreCaseOrderByIdDesc(String city);
     List<Donor> findByPubliclyListedTrueAndBloodGroupIgnoreCaseAndCityContainingIgnoreCaseOrderByIdDesc(
             String bloodGroup, String city);
+    List<Donor> findByOwnerEmailIgnoreCaseOrderByIdDesc(String ownerEmail);
+    List<Donor> findAllByOrderByIdDesc();
 }

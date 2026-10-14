@@ -5,11 +5,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import com.blooddonor.config.CorsConfig;
+import com.blooddonor.config.SecurityConfig;
 import java.time.LocalDate;
+import java.util.Optional;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,8 +25,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(DonorController.class)
-@Import(CorsConfig.class)
-@TestPropertySource(properties = "app.admin-api-key=test-admin-key")
+@Import({CorsConfig.class, SecurityConfig.class})
+@TestPropertySource(properties = "app.jwt.secret=test-secret-123456789012345678901234567890")
 class DonorControllerTest {
     @Autowired
     private MockMvc mockMvc;
@@ -52,6 +55,7 @@ class DonorControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "taylor@example.com", roles = "USER")
     void registrationValidatesInputAndSavesOptIn() throws Exception {
         when(repository.save(any(Donor.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -64,10 +68,12 @@ class DonorControllerTest {
                 .andExpect(jsonPath("$.publiclyListed").value(true))
                 .andExpect(jsonPath("$.phone").doesNotExist());
 
-        verify(repository).save(org.mockito.ArgumentMatchers.argThat(Donor::isPubliclyListed));
+        verify(repository).save(org.mockito.ArgumentMatchers.argThat(donor ->
+                donor.isPubliclyListed() && "taylor@example.com".equals(donor.getOwnerEmail())));
     }
 
     @Test
+    @WithMockUser(username = "taylor@example.com", roles = "USER")
     void invalidRegistrationIsRejected() throws Exception {
         mockMvc.perform(post("/api/donors")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -78,19 +84,59 @@ class DonorControllerTest {
     }
 
     @Test
-    void deleteRequiresAdminKey() throws Exception {
-        mockMvc.perform(delete("/api/donors/1"))
-                .andExpect(status().isForbidden());
+    void registrationRequiresAuthentication() throws Exception {
+        mockMvc.perform(post("/api/donors")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
-    void configuredAdminKeyAllowsDelete() throws Exception {
-        when(repository.existsById(1L)).thenReturn(true);
+    void deleteRequiresAuthentication() throws Exception {
+        mockMvc.perform(delete("/api/donors/1"))
+                .andExpect(status().isUnauthorized());
+    }
 
-        mockMvc.perform(delete("/api/donors/1").header("X-Admin-Key", "test-admin-key"))
+    @Test
+    @WithMockUser(username = "admin@example.com", roles = "ADMIN")
+    void adminCanDeleteAnyDonor() throws Exception {
+        Donor donor = new Donor();
+        donor.setId(1L);
+        when(repository.findById(1L)).thenReturn(Optional.of(donor));
+
+        mockMvc.perform(delete("/api/donors/1"))
                 .andExpect(status().isNoContent());
 
-        verify(repository).deleteById(1L);
+        verify(repository).delete(donor);
+    }
+
+    @Test
+    @WithMockUser(username = "taylor@example.com", roles = "USER")
+    void donorOwnerCanReadPrivateProfile() throws Exception {
+        Donor donor = new Donor();
+        donor.setId(1L);
+        donor.setFullName("Taylor Donor");
+        donor.setAge(30);
+        donor.setBloodGroup("O+");
+        donor.setCity("Boston");
+        donor.setOwnerEmail("taylor@example.com");
+        when(repository.findById(1L)).thenReturn(Optional.of(donor));
+
+        mockMvc.perform(get("/api/donors/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fullName").value("Taylor Donor"));
+    }
+
+    @Test
+    @WithMockUser(username = "other@example.com", roles = "USER")
+    void anotherUserCannotReadPrivateProfile() throws Exception {
+        Donor donor = new Donor();
+        donor.setId(1L);
+        donor.setOwnerEmail("taylor@example.com");
+        when(repository.findById(1L)).thenReturn(Optional.of(donor));
+
+        mockMvc.perform(get("/api/donors/1"))
+                .andExpect(status().isNotFound());
     }
 
     @Test

@@ -1,24 +1,20 @@
 package com.blooddonor.donor;
 
 import jakarta.validation.Valid;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/donors")
 public class DonorController {
+    private static final String DONOR_NOT_FOUND = "Donor not found";
     private final DonorRepository repository;
-    private final String adminApiKey;
 
-    public DonorController(DonorRepository repository,
-                           @Value("${app.admin-api-key:}") String adminApiKey) {
+    public DonorController(DonorRepository repository) {
         this.repository = repository;
-        this.adminApiKey = adminApiKey;
     }
 
     @GetMapping
@@ -36,46 +32,68 @@ public class DonorController {
         return repository.findByPubliclyListedTrueOrderByIdDesc();
     }
 
+    @GetMapping("/mine")
+    public List<Donor> getMyDonors(Authentication authentication) {
+        return repository.findByOwnerEmailIgnoreCaseOrderByIdDesc(authentication.getName());
+    }
+
+    @GetMapping("/admin")
+    public List<Donor> getAllDonorsForAdmin() {
+        return repository.findAllByOrderByIdDesc();
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public Donor createDonor(@Valid @RequestBody DonorRequest request) {
-        return repository.save(toDonor(request, new Donor()));
+    public Donor createDonor(@Valid @RequestBody DonorRequest request, Authentication authentication) {
+        Donor donor = toDonor(request, new Donor());
+        donor.setOwnerEmail(authentication.getName());
+        return repository.save(donor);
     }
 
     @GetMapping("/{id}")
-    public Donor getDonor(@PathVariable Long id) {
-        return repository.findById(id)
-            .filter(Donor::isPubliclyListed)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Donor not found"));
+    public Donor getDonor(@PathVariable Long id, Authentication authentication) {
+        Donor donor = repository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, DONOR_NOT_FOUND));
+        if (!donor.isPubliclyListed() && !canManage(donor, authentication)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, DONOR_NOT_FOUND);
+        }
+        return donor;
     }
 
     @PutMapping("/{id}")
     public Donor updateDonor(@PathVariable Long id,
-                             @RequestHeader(value = "X-Admin-Key", required = false) String suppliedKey,
-                     @Valid @RequestBody DonorRequest request) {
-        requireAdmin(suppliedKey);
+                     @Valid @RequestBody DonorRequest request,
+                     Authentication authentication) {
         Donor donor = repository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Donor not found"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, DONOR_NOT_FOUND));
+        requireCanManage(donor, authentication);
         return repository.save(toDonor(request, donor));
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void deleteDonor(@PathVariable Long id,
-                            @RequestHeader(value = "X-Admin-Key", required = false) String suppliedKey) {
-        requireAdmin(suppliedKey);
-        if (!repository.existsById(id)) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Donor not found");
-        }
-        repository.deleteById(id);
+    public void deleteDonor(@PathVariable Long id, Authentication authentication) {
+        Donor donor = repository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, DONOR_NOT_FOUND));
+        requireCanManage(donor, authentication);
+        repository.delete(donor);
     }
 
-    private void requireAdmin(String suppliedKey) {
-        if (adminApiKey.isBlank() || suppliedKey == null
-                || !MessageDigest.isEqual(adminApiKey.getBytes(StandardCharsets.UTF_8),
-                                          suppliedKey.getBytes(StandardCharsets.UTF_8))) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin API key is invalid");
+    private boolean canManage(Donor donor, Authentication authentication) {
+        return hasRole(authentication, "ROLE_ADMIN")
+                || (donor.getOwnerEmail() != null
+                && donor.getOwnerEmail().equalsIgnoreCase(authentication.getName()));
+    }
+
+    private void requireCanManage(Donor donor, Authentication authentication) {
+        if (!canManage(donor, authentication)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the donor or an admin can manage this profile");
         }
+    }
+
+    private boolean hasRole(Authentication authentication, String role) {
+        return authentication.getAuthorities().stream()
+                .anyMatch(authority -> authority.getAuthority().equals(role));
     }
 
     private Donor toDonor(DonorRequest request, Donor donor) {

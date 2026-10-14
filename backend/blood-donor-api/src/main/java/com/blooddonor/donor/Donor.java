@@ -37,6 +37,10 @@ public class Donor {
     private boolean available = true;
     private boolean publiclyListed;
 
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
+    @Column(length = 254)
+    private String ownerEmail;
+
     @SuppressWarnings("java:S1186")
     public Donor() {}
 
@@ -58,4 +62,6 @@ public class Donor {
     public void setAvailable(boolean available) { this.available = available; }
     public boolean isPubliclyListed() { return publiclyListed; }
     public void setPubliclyListed(boolean publiclyListed) { this.publiclyListed = publiclyListed; }
+    public String getOwnerEmail() { return ownerEmail; }
+    public void setOwnerEmail(String ownerEmail) { this.ownerEmail = ownerEmail; }
 }

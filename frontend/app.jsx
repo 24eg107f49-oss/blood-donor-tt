@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import "./app.css";
+import AuthPanel from "./AuthPanel.jsx";
 
-const API_ORIGIN = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
+const API_ORIGIN = (
+  import.meta.env.VITE_BASE_API_URL || import.meta.env.VITE_API_URL || ""
+).replace(/\/$/, "");
 const API_URL = `${API_ORIGIN}/api/donors`;
 
 const BLOOD_GROUPS = [
@@ -19,6 +22,14 @@ const EMPTY_FORM = {
   publiclyListed: false,
 };
 
+function readSession() {
+  try {
+    return JSON.parse(sessionStorage.getItem("lifelink-session") || "null");
+  } catch {
+    return null;
+  }
+}
+
 function formatLocalDate(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -33,19 +44,35 @@ export default function App() {
   const [searchCity, setSearchCity] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [session, setSession] = useState(readSession);
+  const [ownedDonorIds, setOwnedDonorIds] = useState([]);
 
-  async function loadDonors() {
+  async function loadDonors(activeSession = session) {
     setLoading(true);
 
     try {
-      const response = await fetch(API_URL);
+      const headers = activeSession?.accessToken
+        ? { Authorization: `Bearer ${activeSession.accessToken}` }
+        : {};
+      const isAdmin = activeSession?.account?.role === "ADMIN";
+      const endpoint = isAdmin ? `${API_ORIGIN}/api/donors/admin` : API_URL;
+      const response = await fetch(endpoint, { headers });
 
       if (!response.ok) {
         throw new Error("Unable to load donors");
       }
 
-      const data = await response.json();
+      let data = await response.json();
+      let ownedIds = [];
+      if (activeSession?.accessToken && !isAdmin) {
+        const ownResponse = await fetch(`${API_ORIGIN}/api/donors/mine`, { headers });
+        if (!ownResponse.ok) throw new Error("Unable to load your donor profiles");
+        const ownDonors = await ownResponse.json();
+        ownedIds = ownDonors.map((donor) => donor.id);
+        data = [...new Map([...data, ...ownDonors].map((donor) => [donor.id, donor])).values()];
+      }
       setDonors(data);
+      setOwnedDonorIds(ownedIds);
       setMessage("");
     } catch {
       setMessage(
@@ -57,8 +84,47 @@ export default function App() {
   }
 
   useEffect(() => {
-    void loadDonors();
+    if (!session?.accessToken) {
+      void loadDonors(null);
+      return;
+    }
+
+    let active = true;
+    fetch(`${API_ORIGIN}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${session.accessToken}` },
+    }).then(async (response) => {
+      if (!response.ok) throw new Error("Session expired");
+      const account = await response.json();
+      if (!active) return;
+      const nextSession = { ...session, account };
+      setSession(nextSession);
+      sessionStorage.setItem("lifelink-session", JSON.stringify(nextSession));
+      await loadDonors(nextSession);
+    }).catch(() => {
+      if (!active) return;
+      sessionStorage.removeItem("lifelink-session");
+      setSession(null);
+      void loadDonors(null);
+      setMessage("Your session expired. Sign in again to manage your profile.");
+    });
+
+    return () => { active = false; };
   }, []);
+
+  async function handleAuthenticated(nextSession) {
+    setSession(nextSession);
+    sessionStorage.setItem("lifelink-session", JSON.stringify(nextSession));
+    await loadDonors(nextSession);
+    setMessage(`Signed in as ${nextSession.account.role.toLowerCase()}.`);
+  }
+
+  async function signOut() {
+    sessionStorage.removeItem("lifelink-session");
+    setSession(null);
+    setOwnedDonorIds([]);
+    await loadDonors(null);
+    setMessage("You have signed out.");
+  }
 
   const filteredDonors = useMemo(() => {
     return donors.filter((donor) => {
@@ -109,6 +175,7 @@ export default function App() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.accessToken || ""}`,
         },
         body: JSON.stringify({
           ...form,
@@ -124,18 +191,30 @@ export default function App() {
         throw new Error("Registration failed");
       }
 
-      setForm(EMPTY_FORM);
-      setMessage(
-        form.publiclyListed
-          ? "Registration received. Your profile is now listed."
-          : "Registration received. Your profile will remain private."
-      );
-
-      await loadDonors();
+      setForm({ ...EMPTY_FORM });
+      await loadDonors(session);
+      setMessage(form.publiclyListed
+        ? "Registration received. Your profile is now listed."
+        : "Registration received. Your profile will remain private.");
     } catch {
       setMessage(
         "Registration failed. Check that the backend and database are running."
       );
+    }
+  }
+
+  async function deleteDonor(id) {
+    if (!session?.accessToken || !window.confirm("Delete this donor profile?")) return;
+    try {
+      const response = await fetch(`${API_URL}/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      });
+      if (!response.ok) throw new Error("Could not delete donor profile.");
+      await loadDonors(session);
+      setMessage("Donor profile deleted.");
+    } catch (error) {
+      setMessage(error.message || "Could not delete donor profile.");
     }
   }
 
@@ -171,6 +250,11 @@ export default function App() {
                 {donor.available ? "Marked available" : "Not currently available"}
               </span>
             </div>
+            {(session?.account?.role === "ADMIN" || ownedDonorIds.includes(donor.id)) && (
+              <button className="delete-button" type="button" onClick={() => deleteDonor(donor.id)}>
+                Delete
+              </button>
+            )}
           </article>
         ))}
       </div>
@@ -191,9 +275,14 @@ export default function App() {
           <a href="#directory">Find Donors</a>
         </nav>
 
-        <a className="nav-button" href="#register">
-          Become a Donor
-        </a>
+        {session ? (
+          <div className="account-actions">
+            <span className="account-label">{session.account.email}<small>{session.account.role}</small></span>
+            <button className="secondary-button" type="button" onClick={signOut}>Sign out</button>
+          </div>
+        ) : (
+          <a className="nav-button" href="#account">Sign in</a>
+        )}
       </header>
 
       <main id="home">
@@ -276,6 +365,17 @@ export default function App() {
           </article>
         </section>
 
+        {!session && (
+          <section className="section auth-section" id="account">
+            <div className="section-heading">
+              <span className="eyebrow">YOUR LIFELINK ACCOUNT</span>
+              <h2>Sign in or create an account</h2>
+              <p>Signed-in donors can manage their own profiles.</p>
+            </div>
+            <AuthPanel onAuthenticated={handleAuthenticated} />
+          </section>
+        )}
+
         {message && (
           <output className="message" aria-live="polite">
             {message}
@@ -291,15 +391,15 @@ export default function App() {
 
         <section className="section" id="register">
           <div className="section-heading">
-            <span className="eyebrow">JOIN OUR COMMUNITY</span>
-            <h2>Become a Blood Donor</h2>
+            <span className="eyebrow">{session?.account?.role === "ADMIN" ? "ADMINISTRATION" : "JOIN OUR COMMUNITY"}</span>
+            <h2>{session?.account?.role === "ADMIN" ? "Register a donor" : "Become a Blood Donor"}</h2>
             <p>
               Complete the form to add your information to the
               donor directory.
             </p>
           </div>
 
-          <form className="donor-form" onSubmit={handleSubmit}>
+          {session ? <form className="donor-form" onSubmit={handleSubmit}>
             <label>
               <span>Full Name *</span>
               <input
@@ -400,15 +500,22 @@ export default function App() {
             <button className="primary-button submit-button" type="submit">
               Register Donor →
             </button>
-          </form>
+          </form> : (
+            <div className="auth-required">
+              <p>Sign in or create an account before registering a donor.</p>
+              <a className="primary-button" href="#account">Sign in or create account</a>
+            </div>
+          )}
         </section>
 
         <section className="section directory-section" id="directory">
           <div className="section-heading">
             <span className="eyebrow">FIND A DONOR</span>
-            <h2>Donor Directory</h2>
+            <h2>{session?.account?.role === "ADMIN" ? "Donor management" : "Donor Directory"}</h2>
             <p>
-              Filter registered donors by blood group and city.
+              {session?.account?.role === "ADMIN"
+                ? "Review and manage all donor profiles."
+                : "Filter publicly listed donors; your private profiles remain visible to you."}
             </p>
           </div>
 

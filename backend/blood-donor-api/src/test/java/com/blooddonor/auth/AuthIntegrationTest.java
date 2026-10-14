@@ -35,7 +35,7 @@ class AuthIntegrationTest {
     @Test
     void userCanRegisterLoginAndManageOnlyTheirPrivateDonorProfile() throws Exception {
         String email = "user-" + UUID.randomUUID() + "@example.com";
-        String password = "Strong-User-Password-123!";
+        String password = "x";
         String userToken = register(email, password);
 
         mockMvc.perform(get("/api/donors/admin").header("Authorization", bearer(userToken)))
@@ -49,7 +49,7 @@ class AuthIntegrationTest {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"email":"%s","password":"Incorrect-Password-123!"}
+                                {"email":"%s","password":"wrong"}
                                 """.formatted(email)))
                 .andExpect(status().isUnauthorized());
 
@@ -85,6 +85,16 @@ class AuthIntegrationTest {
         mockMvc.perform(get("/api/donors/admin").header("Authorization", bearer(adminToken)))
                 .andExpect(status().isOk());
     }
+
+        @Test
+        void emptyPasswordGetsValidationResponseInsteadOfAuthenticationChallenge() throws Exception {
+                mockMvc.perform(post("/api/auth/register")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content("""
+                                                                {"email":"empty-password@example.com","password":""}
+                                                                """))
+                                .andExpect(status().isBadRequest());
+        }
 
     private String register(String email, String password) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/register")

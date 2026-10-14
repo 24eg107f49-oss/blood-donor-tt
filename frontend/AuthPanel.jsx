@@ -77,17 +77,12 @@ export default function AuthPanel({ onAuthenticated }) {
           <input
             type="password"
             autoComplete={mode === "login" ? "current-password" : "new-password"}
-            minLength={12}
-            maxLength={72}
-            pattern={mode === "register" ? "(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[^A-Za-z0-9]).{12,72}" : undefined}
+            maxLength={1024}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             required
           />
         </label>
-        {mode === "register" && (
-          <p className="password-hint">Use 12 or more characters with upper/lowercase letters, a number, and a symbol.</p>
-        )}
         {error && <p className="auth-error" role="alert">{error}</p>}
         <button className="primary-button auth-submit" type="submit" disabled={busy}>
           {submitLabel}

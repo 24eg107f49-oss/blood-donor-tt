@@ -7,7 +7,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.Pbkdf2PasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -18,6 +18,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import jakarta.servlet.DispatcherType;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
@@ -49,7 +50,7 @@ public class SecurityConfig {
 
     @Bean
     PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(12);
+        return Pbkdf2PasswordEncoder.defaultsForSpringSecurity_v5_8();
     }
 
     @Bean
@@ -66,10 +67,12 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(HttpSecurity http,
                             JwtAuthenticationConverter jwtAuthenticationConverter) {
         http
+            // This API uses Authorization bearer tokens, never browser cookies.
             .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**"))
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
+                    .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/health", "/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers("/api/auth/me", "/api/donors/mine").authenticated()

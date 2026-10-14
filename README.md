@@ -14,7 +14,7 @@ React + Vite frontend, Spring Boot 4.1 / Java 17 API, and MySQL-compatible datab
 	mvn.cmd -f backend/blood-donor-api/pom.xml spring-boot:run
 	```
 
-	The admin password must be at least 16 characters with mixed case, a number, and a symbol. `.env` is used by Docker Compose, not by `mvn`. Local database defaults use `localhost:3306`, database `blood_donor`, and MySQL user/password `root`/`root`. Override with `DB_URL`, or `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, and `DB_PASSWORD`.
+	Passwords may be any non-empty value up to 1024 characters. `.env` is used by Docker Compose, not by `mvn`. Local database defaults use `localhost:3306`, database `blood_donor`, and MySQL user/password `root`/`root`. Override with `DB_URL`, or `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, and `DB_PASSWORD`.
 3. In another terminal, start the frontend:
 
 	```bash
@@ -29,7 +29,7 @@ React + Vite frontend, Spring Boot 4.1 / Java 17 API, and MySQL-compatible datab
 
 1. Connect the repository to Render and create a Blueprint from `render.yaml`. The service builds from the root `Dockerfile` and checks `/api/health`.
 2. Provide a reachable MySQL-compatible database. Set `DB_URL` to its JDBC URL (`jdbc:mysql://...`), plus `DB_USERNAME` and `DB_PASSWORD`. Do not use a `mysql://` URL. The current backend does not use PostgreSQL.
-3. Set `CORS_ALLOWED_ORIGINS` to the exact deployed Vercel origin, with no path (for example, `https://your-app.vercel.app`). Set `JWT_SECRET` to a cryptographically random secret of at least 32 characters. Set `ADMIN_EMAIL` and a strong `ADMIN_PASSWORD` to bootstrap the admin account. Never put these values in the frontend.
+3. Set `CORS_ALLOWED_ORIGINS` to the exact deployed Vercel origin, with no path (for example, `https://your-app.vercel.app`). Set `JWT_SECRET` to a cryptographically random secret of at least 32 characters. Set `ADMIN_EMAIL` and a non-empty `ADMIN_PASSWORD` to bootstrap the admin account. Never put these values in the frontend.
 4. Keep secrets in the Render environment, not in source control. `DDL_AUTO` defaults to `update`; use a deliberate schema migration process before changing it to `validate`.
 
 ## Run backend with Docker Compose

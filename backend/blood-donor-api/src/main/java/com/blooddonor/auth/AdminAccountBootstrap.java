@@ -27,8 +27,8 @@ public class AdminAccountBootstrap implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         if (adminEmail.isBlank() && adminPassword.isBlank()) return;
-        if (adminEmail.isBlank() || !isStrong(adminPassword)) {
-            throw new IllegalStateException("Configure ADMIN_EMAIL and a 16-character mixed-case ADMIN_PASSWORD");
+        if (adminEmail.isBlank() || adminPassword.isBlank() || adminPassword.length() > 1024) {
+            throw new IllegalStateException("Configure ADMIN_EMAIL and a non-empty ADMIN_PASSWORD of at most 1024 characters");
         }
 
         AppUser admin = users.findByEmailIgnoreCase(adminEmail).orElse(null);
@@ -41,8 +41,4 @@ public class AdminAccountBootstrap implements ApplicationRunner {
         users.save(admin);
     }
 
-    private boolean isStrong(String password) {
-        return password.length() >= 16 && password.length() <= 72
-                && password.matches("(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9]).*");
-    }
 }

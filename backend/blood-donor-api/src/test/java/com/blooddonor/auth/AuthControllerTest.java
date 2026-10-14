@@ -46,13 +46,26 @@ class AuthControllerTest {
     }
 
     @Test
-    void weakRegistrationPasswordIsRejected() throws Exception {
+        void shortNonEmptyRegistrationPasswordIsAccepted() throws Exception {
+                when(authService.register(any())).thenReturn(new AuthResponse(
+                                "signed-token", 900, new AuthResponse.Account("user@example.com", "USER")));
+
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"email":"user@example.com","password":"weak"}
+                                                                {"email":"user@example.com","password":"x"}
                                 """))
-                .andExpect(status().isBadRequest());
+                                .andExpect(status().isCreated());
+        }
+
+        @Test
+        void emptyRegistrationPasswordIsRejected() throws Exception {
+                mockMvc.perform(post("/api/auth/register")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content("""
+                                                                {"email":"user@example.com","password":""}
+                                                                """))
+                                .andExpect(status().isBadRequest());
     }
 
     @Test

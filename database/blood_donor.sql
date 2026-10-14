@@ -1,0 +1,15 @@
+CREATE DATABASE IF NOT EXISTS blood_donor;
+USE blood_donor;
+
+CREATE TABLE IF NOT EXISTS donors (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    full_name VARCHAR(100) NOT NULL,
+    age INT NOT NULL,
+    blood_group VARCHAR(5) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    city VARCHAR(100) NOT NULL,
+    last_donation_date DATE NULL,
+    available BOOLEAN NOT NULL DEFAULT TRUE,
+    publicly_listed BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

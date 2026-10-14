@@ -3,21 +3,26 @@ package com.blooddonor.donor;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import com.blooddonor.config.CorsConfig;
 import java.time.LocalDate;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(DonorController.class)
+@Import(CorsConfig.class)
 @TestPropertySource(properties = "app.admin-api-key=test-admin-key")
 class DonorControllerTest {
     @Autowired
@@ -86,5 +91,15 @@ class DonorControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(repository).deleteById(1L);
+    }
+
+    @Test
+    void corsAllowsViteDevOriginOnAlternatePort() throws Exception {
+        mockMvc.perform(options("/api/donors")
+                        .header("Origin", "http://localhost:5174")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "content-type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5174"));
     }
 }
